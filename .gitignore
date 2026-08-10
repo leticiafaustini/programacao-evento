@@ -1,0 +1,15 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Node (caso adicione tooling no futuro)
+node_modules/
+npm-debug.log*
+
+# Diversos
+*.log
