@@ -483,8 +483,8 @@
 
 <script>
 // ====== CONFIGURAÇÃO DO HUBSPOT ======
-const HUBSPOT_PORTAL_ID = 'SEU_PORTAL_ID';
-const HUBSPOT_FORM_GUID = 'SEU_FORM_GUID';
+const HUBSPOT_PORTAL_ID = '49424759';
+const HUBSPOT_FORM_GUID = 'a1c5f329-6979-4cb1-a91f-122ded0137b5';
 
 async function enviarLeadParaHubspot(lead, diag){
   if(HUBSPOT_PORTAL_ID.startsWith('SEU_') || HUBSPOT_FORM_GUID.startsWith('SEU_')){
@@ -498,20 +498,6 @@ async function enviarLeadParaHubspot(lead, diag){
     { name: 'jobtitle', value: lead.cargo },
     { name: 'phone', value: lead.whatsapp }
   ];
-  if(diag){
-    fields.push(
-      { name: 'quantidade_participantes', value: String(diag.b2.quantidade || '') },
-      { name: 'primeira_edicao', value: diag.b2.primeiraEdicao || '' },
-      { name: 'tipo_evento', value: diag.b1.objetivo || '' },
-      { name: 'ingresso_pago_gratuito', value: diag.b1.tipoEvento || '' },
-      { name: 'dias_evento', value: String(diag.b5.dias || '') },
-      { name: 'estrutura_evento', value: (diag.b3.itens || []).join(', ') },
-      { name: 'qtd_palestrantes', value: String(diag.b4.quantidade || '') },
-      { name: 'cidade_evento', value: diag.b2.cidade || '' },
-      { name: 'data_evento', value: diag.b5.data || '' },
-      { name: 'principal_preocupacao', value: (diag.b6 && diag.b6.preocupacao) || '' }
-    );
-  }
   try{
     await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`, {
       method: 'POST',
