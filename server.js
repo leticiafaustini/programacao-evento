@@ -2,19 +2,21 @@
 // Servidor do Planejador Inteligente de Eventos — e-inscrição
 // Recebe o diagnóstico preenchido no quiz, pede pra IA (Claude) montar
 // um plano de evento completo, e devolve em JSON pro front-end renderizar.
+//
+// Chama a API da Anthropic diretamente via fetch nativo do Node.js
+// (Node 18+), sem depender de nenhum pacote externo além do express.
 
 const express = require("express");
-const path = require("path");
-const Anthropic = require("@anthropic-ai/sdk");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // A chave de API é lida de uma variável de ambiente — NUNCA fica escrita no código.
 // Configure ANTHROPIC_API_KEY nas Environment Variables do Render.
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+const MODEL = "claude-sonnet-4-5";
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(__dirname));
@@ -104,11 +106,47 @@ Responda ESTRITAMENTE em formato JSON válido, sem nenhum texto antes ou depois,
 }
 
 // ---------------------------------------------------------------
+// Chama a API da Anthropic diretamente via fetch (sem SDK externo)
+// ---------------------------------------------------------------
+async function chamarClaude(prompt) {
+  const response = await fetch(ANTHROPIC_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": ANTHROPIC_VERSION,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 16000,
+      messages: [
+        { role: "user", content: prompt },
+        { role: "assistant", content: "{" },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Anthropic API respondeu ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+  const textBlock = (data.content || []).find((b) => b.type === "text");
+  if (!textBlock) {
+    throw new Error("Resposta da IA sem bloco de texto.");
+  }
+  // Como usamos prefill (começamos a resposta do assistant com "{"),
+  // o texto retornado não inclui essa chave — precisamos recolocá-la.
+  return "{" + textBlock.text;
+}
+
+// ---------------------------------------------------------------
 // Endpoint principal
 // ---------------------------------------------------------------
 app.post("/api/gerar-plano", async (req, res) => {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!ANTHROPIC_API_KEY) {
       return res.status(500).json({
         error:
           "ANTHROPIC_API_KEY não configurada no servidor. Configure a variável de ambiente no Render.",
@@ -121,20 +159,18 @@ app.post("/api/gerar-plano", async (req, res) => {
     }
 
     const prompt = montarPrompt(diag);
-
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 8000,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const textBlock = message.content.find((b) => b.type === "text");
-    if (!textBlock) {
-      return res.status(502).json({ error: "Resposta inesperada da IA (sem texto)." });
-    }
+    const rawText = await chamarClaude(prompt);
 
     // Remove eventuais crases de bloco de código (```json ... ```) antes de parsear
-    const cleaned = textBlock.text.replace(/```json|```/g, "").trim();
+    let cleaned = rawText.replace(/```json|```/g, "").trim();
+
+    // Camada extra de segurança: se sobrar texto antes/depois do JSON,
+    // corta tudo fora do primeiro "{" e do último "}".
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
 
     let parsed;
     try {
