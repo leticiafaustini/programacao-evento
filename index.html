@@ -498,8 +498,9 @@ async function enviarLeadParaHubspot(lead, diag){
     { name: 'jobtitle', value: lead.cargo },
     { name: 'phone', value: lead.whatsapp }
   ];
+  const url = `https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`;
   try{
-    await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`, {
+    const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -507,8 +508,14 @@ async function enviarLeadParaHubspot(lead, diag){
         context: { pageUri: window.location.href, pageName: 'Planejador Inteligente de Eventos — e-inscrição' }
       })
     });
+    const respBody = await resp.json().catch(() => null);
+    if(!resp.ok){
+      console.error('[HubSpot] Envio REJEITADO pela API. Status:', resp.status, '| Resposta completa:', respBody);
+    } else {
+      console.log('[HubSpot] Lead enviado com sucesso. Resposta:', respBody);
+    }
   } catch(err){
-    console.error('[HubSpot] Erro ao enviar lead:', err);
+    console.error('[HubSpot] Erro de rede/CORS ao enviar lead (provável bloqueio por extensão/adblock ou teste via file://):', err);
   }
 }
 
